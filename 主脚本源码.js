@@ -1,6 +1,6 @@
 "ui";
 
-var VERSION = "1.0.41";
+var VERSION = "1.0.42";
 
 测试
 
