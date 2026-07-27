@@ -1,8 +1,6 @@
 "ui";
 
-var VERSION = "1.0.43";
-
-测试
+var VERSION = "1.0.44";
 
 // ==================== 项目配置区 ====================
 var PROJECT_NAME = "YPX GAME TOOL";
@@ -219,7 +217,7 @@ function launchGame(pkg) {
         });
         return true;
     } catch (e) {
-        toast        toastSafe("启动失败: " + e.message);
+        toastSafe("启动失败: " + e.message);
         return false;
     }
 }
@@ -658,6 +656,7 @@ function animateFloatTo(targetX, targetY) {
 function loadCircleIcon(imageView) {
     threads.start(function() {
         try {
+            // ⚠️ 注意：请将此路径替换为你手机上实际的图标路径
             var imgPath = "/mnt/agents/upload/1000033298.jpg";
             if (!files.exists(imgPath)) {
                 log("图标文件不存在: " + imgPath);
