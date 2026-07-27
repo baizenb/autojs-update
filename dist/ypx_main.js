@@ -1,6 +1,6 @@
 "ui";
 
-var VERSION = "1.0.47";
+var VERSION = "1.0.45";
 
 // ==================== 项目配置区 ====================
 var PROJECT_NAME = "YPX GAME TOOL";
@@ -61,7 +61,7 @@ function dp2px(dp) {
     return Math.floor(dp * context.getResources().getDisplayMetrics().density);
 }
 
-// ==================== 位置持久化（加固版） ====================
+// ==================== 位置持久化 ====================
 function loadFloatPosition() {
     try {
         var storage = storages.create("YPX_TOOL_POS");
@@ -136,9 +136,8 @@ function showWelcomeDialog() {
     welcomeShown = true;
     var updateLog = "【本次更新内容】\n" +
         "• 悬浮窗改为横向滑动功能列表\n" +
-        "• 修复收起小球显示与拖动\n" +
-        "• 拖动不再吸附边缘\n" +
-        "• 优化点击响应速度\n\n" +
+        "• 修复收起按钮显示与小球拖动\n" +
+        "• 拖动不再吸附边缘\n\n" +
         "请选择游戏项目，点击「启动游戏」后即可使用辅助功能。\n本脚本仅供学习交流使用。";
     ui.run(function() {
         try {
@@ -159,7 +158,7 @@ function showWelcomeDialog() {
     });
 }
 
-// ==================== 游戏检测（加固版） ====================
+// ==================== 游戏检测 ====================
 function refreshInstalledPackages() {
     installedPkgs = {};
     try {
@@ -202,7 +201,7 @@ function checkGameFront(pkg) {
     return false;
 }
 
-// ==================== 启动游戏（加固版） ====================
+// ==================== 启动游戏 ====================
 function launchGame(pkg) {
     if (!pkg) {
         toastSafe("包名错误");
@@ -280,7 +279,7 @@ function createCardBg() {
     }
 }
 
-// ==================== 功能开关核心（去卡顿优化版） ====================
+// ==================== 功能开关核心（去卡顿版） ====================
 function toggleFunction(gameIdx, funcIdx, btnView) {
     try {
         var game = GAME_LIBRARY[gameIdx];
@@ -294,14 +293,13 @@ function toggleFunction(gameIdx, funcIdx, btnView) {
         
         var willStart = !runFlags[key];
         
-        // 先更新视觉，再处理线程，避免UI卡顿
+        // 先更新视觉，再启停线程，避免UI阻塞
         updateBtnVisual(btnView, willStart);
         
         if (runFlags[key]) {
             runFlags[key] = false;
-            // 延迟中断，避免阻塞UI
             threads.start(function() {
-                sleep(50);
+                sleep(30);
                 if (taskThreads[key]) {
                     try { taskThreads[key].interrupt(); } catch (e) {}
                     taskThreads[key] = null;
@@ -359,7 +357,7 @@ function updateBtnVisual(btnView, isRunning) {
     });
 }
 
-// ==================== 主UI布局（去掉功能卡片） ====================
+// ==================== 主UI布局（无功能卡片） ====================
 ui.layout(
     <frame w="*" h="*" bg="{{C.pageBg}}">
         <!-- 首页 -->
@@ -533,7 +531,7 @@ try {
     log("绑定导航异常: " + e);
 }
 
-// ==================== 游戏前台检测线程（防崩溃加固版） ====================
+// ==================== 游戏前台检测线程 ====================
 function startGameDetect() {
     if (detectThread) {
         try { detectThread.interrupt(); } catch (e) {}
@@ -603,7 +601,7 @@ function startGameDetect() {
     });
 }
 
-// ==================== 加载圆形图标（带备用显示） ====================
+// ==================== 加载圆形图标 ====================
 function loadCircleIcon(imageView) {
     threads.start(function() {
         var loaded = false;
@@ -665,10 +663,10 @@ function showFloatWindow() {
             <frame id="floatRoot" w="320" h="wrap_content">
                 <!-- 展开面板 -->
                 <vertical id="floatPanel" bg="#E61a1a2e" radius="16" visibility="visible">
-                    <!-- 标题栏 + 明显最小化按钮 -->
+                    <!-- 标题栏 + 最小化按钮 -->
                     <horizontal gravity="center_vertical" padding="12 10">
                         <text text="YPX TOOL" textColor="#ffffff" textSize="14" textStyle="bold" layout_weight="1"/>
-                        <text id="btnMinimizeFloat" text="⊟" textColor="#ffffff" textSize="14" bg="#e94560" padding="10 6" radius="6" gravity="center" w="auto"/>
+                        <text id="btnMinimizeFloat" text="收起" textColor="#ffffff" textSize="12" bg="#e94560" padding="8 6" radius="6" gravity="center" w="auto"/>
                     </horizontal>
                     
                     <!-- 导航栏 -->
@@ -681,7 +679,7 @@ function showFloatWindow() {
                     <!-- 首页：横向滑动功能列表 -->
                     <vertical id="fpHome" w="*" h="wrap_content" padding="10">
                         <text id="floatGameTitle" text="功能列表" textSize="13" textColor="#ffffff" textStyle="bold" marginBottom="6"/>
-                        <android.widget.HorizontalScrollView w="*" h="wrap_content" scrollbars="none">
+                        <android.widget.HorizontalScrollView id="floatScroll" w="*" h="wrap_content" scrollbars="none">
                             <horizontal id="floatFuncContainer" w="auto" h="wrap_content"/>
                         </android.widget.HorizontalScrollView>
                     </vertical>
@@ -710,8 +708,20 @@ function showFloatWindow() {
         
         loadCircleIcon(floatWin.floatBallImg);
         
+        // 显式强制横向容器为 WRAP_CONTENT，防止被压缩换行
+        try {
+            var fc = floatWin.floatFuncContainer;
+            fc.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            var fclp = fc.getLayoutParams();
+            if (fclp) {
+                fclp.width = -2; // WRAP_CONTENT
+                fc.setLayoutParams(fclp);
+            }
+        } catch (e) {
+            log("强制横向容器异常: " + e);
+        }
+        
         var pos = loadFloatPosition();
-        // 越界保护（展开状态）
         if (pos.x < 0) pos.x = 0;
         if (pos.y < 0) pos.y = 0;
         if (pos.x + 320 > device.width) pos.x = Math.max(0, device.width - 320);
@@ -729,7 +739,6 @@ function showFloatWindow() {
                 floatExpanded = false;
                 var cx = floatWin.getX();
                 var cy = floatWin.getY();
-                // 仅越界保护，不吸附边缘
                 if (cx < 0) cx = 0;
                 if (cy < 0) cy = 0;
                 if (cx > device.width - 50) cx = device.width - 50;
@@ -762,7 +771,6 @@ function showFloatWindow() {
                             if (Math.abs(nx - floatWin.getX()) > 2 || Math.abs(ny - floatWin.getY()) > 2) {
                                 ballIsMoved = true;
                             }
-                            // 仅越界保护，不吸附
                             if (nx < 0) nx = 0;
                             if (ny < 0) ny = 0;
                             if (nx > device.width - 50) nx = device.width - 50;
@@ -786,7 +794,7 @@ function showFloatWindow() {
                                 saveFloatPosition(ex, ey);
                                 return true;
                             }
-                            // 拖动结束：保存当前位置，不做边缘吸附
+                            // 拖动结束：保存当前位置
                             var fx = floatWin.getX();
                             var fy = floatWin.getY();
                             saveFloatPosition(fx, fy);
@@ -801,10 +809,9 @@ function showFloatWindow() {
         
         // 展开面板触摸监听（仅处理拖动，不吸附边缘）
         var dragX = 0, dragY = 0, isMoved = false;
-        floatWin.floatRoot.setOnTouchListener(new android.view.View.OnTouchListener({
+        floatWin.floatPanel.setOnTouchListener(new android.view.View.OnTouchListener({
             onTouch: function(v, event) {
                 try {
-                    if (!floatExpanded) return false;
                     switch (event.getAction()) {
                         case event.ACTION_DOWN:
                             dragX = event.getRawX() - floatWin.getX();
@@ -817,7 +824,6 @@ function showFloatWindow() {
                             if (Math.abs(nx - floatWin.getX()) > 2 || Math.abs(ny - floatWin.getY()) > 2) {
                                 isMoved = true;
                             }
-                            // 仅越界保护，不吸附边缘
                             if (nx < 0) nx = 0;
                             if (ny < 0) ny = 0;
                             if (nx + 320 > device.width) nx = device.width - 320;
@@ -826,7 +832,6 @@ function showFloatWindow() {
                             return true;
                         case event.ACTION_UP:
                             if (isMoved) {
-                                // 保存当前位置，不做边缘吸附
                                 var fx = floatWin.getX();
                                 var fy = floatWin.getY();
                                 saveFloatPosition(fx, fy);
@@ -889,7 +894,7 @@ function refreshFloatFunctions() {
     }
 }
 
-// 悬浮窗内白色功能卡片（固定宽度，横向排列）
+// 悬浮窗内白色功能卡片
 function createFloatFuncCard(gameIdx, funcIdx, func) {
     try {
         var card = new android.widget.LinearLayout(context);
@@ -968,7 +973,7 @@ function switchFloatPage(page) {
     }
 }
 
-// ==================== 退出清理（加固版） ====================
+// ==================== 退出清理 ====================
 events.on("exit", function() {
     try {
         if (detectThread) try { detectThread.interrupt(); } catch (e) {}
@@ -982,7 +987,7 @@ events.on("exit", function() {
     }
 });
 
-// ==================== 启动（加固版） ====================
+// ==================== 启动 ====================
 threads.start(function() {
     try {
         sleep(600);
