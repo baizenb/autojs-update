@@ -1,6 +1,6 @@
 "ui";
 
-var VERSION = "1.0.44";
+var VERSION = "1.0.45";
 
 // ==================== 项目配置区 ====================
 var PROJECT_NAME = "YPX GAME TOOL";
@@ -702,13 +702,13 @@ function showFloatWindow() {
     var game = GAME_LIBRARY[currentGameIndex];
     
     floatWin = floaty.window(
-        <frame id="floatRoot" w="320" h="wrap_content">
+        <frame id="floatRoot" w="*" h="*">
             <!-- 展开面板 -->
             <vertical id="floatPanel" bg="#E61a1a2e" radius="16" visibility="visible">
                 <!-- 标题栏 + 明显最小化按钮 -->
                 <horizontal gravity="center_vertical" padding="12 10">
                     <text text="YPX TOOL" textColor="#ffffff" textSize="14" textStyle="bold" layout_weight="1"/>
-                    <text id="btnMinimizeFloat" text="⊟ 收起" textColor="#ffffff" textSize="11" bg="#e94560" padding="12 7" radius="6" gravity="center" w="auto"/>
+                    <text id="btnMinimizeFloat" text="⊟" textColor="#ffffff" textSize="14" bg="#e94560" padding="10 6" radius="6" gravity="center" w="auto"/>
                 </horizontal>
                 
                 <!-- 导航栏 -->
@@ -749,6 +749,13 @@ function showFloatWindow() {
     loadCircleIcon(floatWin.floatBallImg);
     
     var pos = loadFloatPosition();
+    // 边界检查（初始为展开状态，窗口宽约320）
+    if (pos.x < 10) pos.x = 10;
+    if (pos.y < 80) pos.y = 80;
+    var maxX = device.width - 330;
+    var maxY = device.height - 480;
+    if (pos.x > maxX) pos.x = maxX;
+    if (pos.y > maxY) pos.y = maxY;
     floatWin.setPosition(pos.x, pos.y);
     
     refreshFloatFunctions();
@@ -760,11 +767,15 @@ function showFloatWindow() {
         floatExpanded = false;
         var finalX = floatWin.getX();
         var finalY = floatWin.getY();
+        // 收起时吸附到左右边缘
         if (finalX + 25 > device.width / 2) {
             finalX = device.width - 60;
         } else {
             finalX = 10;
         }
+        // Y轴保持相对位置，但限制边界
+        if (finalY < 80) finalY = 80;
+        if (finalY > device.height - 50 - 80) finalY = device.height - 50 - 80;
         animateFloatTo(finalX, finalY);
         saveFloatPosition(finalX, finalY);
     });
@@ -773,16 +784,69 @@ function showFloatWindow() {
     floatWin.fnUser.click(function() { switchFloatPage("user"); });
     floatWin.fnSetting.click(function() { switchFloatPage("setting"); });
     
-    floatWin.floatBall.click(function() {
-        floatWin.floatBall.setVisibility(android.view.View.GONE);
-        floatWin.floatPanel.setVisibility(android.view.View.VISIBLE);
-        floatWin.setSize(320, -2);
-        floatExpanded = true;
-    });
+    // 小球触摸监听（拖动 + 点击展开）
+    var ballDragX = 0, ballDragY = 0, ballIsMoved = false;
+    floatWin.floatBall.setOnTouchListener(new android.view.View.OnTouchListener({
+        onTouch: function(v, event) {
+            switch (event.getAction()) {
+                case event.ACTION_DOWN:
+                    ballDragX = event.getRawX() - floatWin.getX();
+                    ballDragY = event.getRawY() - floatWin.getY();
+                    ballIsMoved = false;
+                    return true;
+                case event.ACTION_MOVE:
+                    var nx = event.getRawX() - ballDragX;
+                    var ny = event.getRawY() - ballDragY;
+                    if (Math.abs(nx - floatWin.getX()) > 2 || Math.abs(ny - floatWin.getY()) > 2) {
+                        ballIsMoved = true;
+                    }
+                    floatWin.setPosition(nx, ny);
+                    return true;
+                case event.ACTION_UP:
+                    if (!ballIsMoved) {
+                        // 点击展开
+                        floatWin.floatBall.setVisibility(android.view.View.GONE);
+                        floatWin.floatPanel.setVisibility(android.view.View.VISIBLE);
+                        floatWin.setSize(320, -2);
+                        floatExpanded = true;
+                        // 展开时确保位置不会超出屏幕
+                        var ex = floatWin.getX();
+                        var ey = floatWin.getY();
+                        var needSave = false;
+                        if (ex < 10) { ex = 10; needSave = true; }
+                        if (ex + 320 > device.width - 10) { ex = device.width - 330; needSave = true; }
+                        if (ey < 80) { ey = 80; needSave = true; }
+                        if (needSave) {
+                            floatWin.setPosition(ex, ey);
+                            saveFloatPosition(ex, ey);
+                        }
+                        return true;
+                    }
+                    // 拖动结束，吸附到边缘
+                    var finalX = floatWin.getX();
+                    var finalY = floatWin.getY();
+                    if (finalX + 25 > device.width / 2) {
+                        finalX = device.width - 60;
+                    } else {
+                        finalX = 10;
+                    }
+                    if (finalY < 80) finalY = 80;
+                    if (finalY > device.height - 50 - 80) finalY = device.height - 50 - 80;
+                    animateFloatTo(finalX, finalY);
+                    saveFloatPosition(finalX, finalY);
+                    return true;
+            }
+            return false;
+        }
+    }));
     
+    // 展开面板触摸监听（仅处理拖动）
     var dragX = 0, dragY = 0, isMoved = false;
     floatWin.floatRoot.setOnTouchListener(new android.view.View.OnTouchListener({
         onTouch: function(v, event) {
+            // 收起状态由小球自己处理拖动
+            if (!floatExpanded) return false;
+            
             switch (event.getAction()) {
                 case event.ACTION_DOWN:
                     dragX = event.getRawX() - floatWin.getX();
@@ -801,8 +865,8 @@ function showFloatWindow() {
                     if (isMoved) {
                         var finalX = floatWin.getX();
                         var finalY = floatWin.getY();
-                        var w = floatExpanded ? 320 : 50;
-                        var h = floatExpanded ? 400 : 50;
+                        var w = 320;
+                        var h = 400;
                         
                         if (finalX + w / 2 > device.width / 2) {
                             finalX = device.width - w - 10;
