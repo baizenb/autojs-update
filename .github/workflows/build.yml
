@@ -3,7 +3,6 @@ name: Auto Build
 on:
   push:
     branches: [main]
-    paths: ['主脚本源码.js']
 
 permissions:
   contents: write
@@ -12,16 +11,12 @@ jobs:
   build:
     if: "!contains(github.event.head_commit.message, '[auto-build]')"
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v4
-        
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
       - run: python build.py
-        
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
