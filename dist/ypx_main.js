@@ -1,6 +1,6 @@
 "ui";
 
-var VERSION = "1.0.46";
+var VERSION = "1.0.47";
 
 // ==================== 项目配置区 ====================
 var PROJECT_NAME = "YPX GAME TOOL";
@@ -135,8 +135,10 @@ function showWelcomeDialog() {
     if (welcomeShown) return;
     welcomeShown = true;
     var updateLog = "【本次更新内容】\n" +
-        "• 修复悬浮窗拖动与位置记录\n" +
-        "• 优化运行稳定性\n\n" +
+        "• 悬浮窗改为横向滑动功能列表\n" +
+        "• 修复收起小球显示与拖动\n" +
+        "• 拖动不再吸附边缘\n" +
+        "• 优化点击响应速度\n\n" +
         "请选择游戏项目，点击「启动游戏」后即可使用辅助功能。\n本脚本仅供学习交流使用。";
     ui.run(function() {
         try {
@@ -278,7 +280,7 @@ function createCardBg() {
     }
 }
 
-// ==================== 功能开关核心（加固版） ====================
+// ==================== 功能开关核心（去卡顿优化版） ====================
 function toggleFunction(gameIdx, funcIdx, btnView) {
     try {
         var game = GAME_LIBRARY[gameIdx];
@@ -292,12 +294,19 @@ function toggleFunction(gameIdx, funcIdx, btnView) {
         
         var willStart = !runFlags[key];
         
+        // 先更新视觉，再处理线程，避免UI卡顿
+        updateBtnVisual(btnView, willStart);
+        
         if (runFlags[key]) {
             runFlags[key] = false;
-            if (taskThreads[key]) {
-                try { taskThreads[key].interrupt(); } catch (e) {}
-                taskThreads[key] = null;
-            }
+            // 延迟中断，避免阻塞UI
+            threads.start(function() {
+                sleep(50);
+                if (taskThreads[key]) {
+                    try { taskThreads[key].interrupt(); } catch (e) {}
+                    taskThreads[key] = null;
+                }
+            });
             log(func.name + " 已停止");
         } else {
             runFlags[key] = true;
@@ -318,8 +327,6 @@ function toggleFunction(gameIdx, funcIdx, btnView) {
                 }
             });
         }
-        
-        updateBtnVisual(btnView, willStart);
     } catch (e) {
         log("toggleFunction 异常: " + e);
     }
@@ -352,110 +359,7 @@ function updateBtnVisual(btnView, isRunning) {
     });
 }
 
-// ==================== 主界面功能卡片（横向滑动） ====================
-function buildFunctionCards(gameIndex) {
-    ui.run(function() {
-        try {
-            var container = ui.funcContainer;
-            if (!container) return;
-            
-            try {
-                container.removeAllViews();
-            } catch (e) {
-                var childCount = container.getChildCount();
-                for (var i = childCount - 1; i >= 0; i--) {
-                    try { container.removeViewAt(i); } catch (e2) {}
-                }
-            }
-            
-            var game = GAME_LIBRARY[gameIndex];
-            if (!game || !game.funcs || game.funcs.length === 0) {
-                var hint = new android.widget.TextView(context);
-                hint.setText("暂无功能数据");
-                hint.setTextSize(14);
-                hint.setTextColor(colors.parseColor(C.textSub));
-                hint.setGravity(android.view.Gravity.CENTER);
-                hint.setPadding(dp2px(80), dp2px(80), dp2px(80), dp2px(80));
-                container.addView(hint, new android.widget.LinearLayout.LayoutParams(-2, -2));
-                return;
-            }
-            
-            for (var i = 0; i < game.funcs.length; i++) {
-                var func = game.funcs[i];
-                var card = createMainFuncCard(gameIndex, i, func);
-                var lp = new android.widget.LinearLayout.LayoutParams(dp2px(110), -2);
-                lp.setMargins(dp2px(6), dp2px(8), dp2px(6), dp2px(8));
-                container.addView(card, lp);
-            }
-        } catch (e) {
-            log("buildFunctionCards 异常: " + e);
-        }
-    });
-}
-
-function createMainFuncCard(gameIdx, funcIdx, func) {
-    try {
-        var card = new android.widget.LinearLayout(context);
-        card.setOrientation(android.widget.LinearLayout.VERTICAL);
-        card.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-        card.setPadding(dp2px(12), dp2px(16), dp2px(12), dp2px(12));
-        card.setBackgroundDrawable(createCardBg());
-        
-        var icon = new android.widget.TextView(context);
-        icon.setText(func.icon);
-        icon.setTextSize(26);
-        icon.setGravity(android.view.Gravity.CENTER);
-        card.addView(icon, new android.widget.LinearLayout.LayoutParams(dp2px(56), dp2px(56)));
-        
-        var name = new android.widget.TextView(context);
-        name.setText(func.name);
-        name.setTextSize(12);
-        name.setTextColor(colors.parseColor(C.textMain));
-        name.setGravity(android.view.Gravity.CENTER);
-        name.setPadding(0, dp2px(6), 0, 0);
-        card.addView(name, new android.widget.LinearLayout.LayoutParams(-2, -2));
-        
-        var desc = new android.widget.TextView(context);
-        desc.setText(func.desc);
-        desc.setTextSize(10);
-        desc.setTextColor(colors.parseColor(C.textSub));
-        desc.setGravity(android.view.Gravity.CENTER);
-        card.addView(desc, new android.widget.LinearLayout.LayoutParams(-2, -2));
-        
-        var btn = new android.widget.Button(context);
-        var key = gameIdx + "_" + funcIdx;
-        runFlags[key] = runFlags[key] || false;
-        
-        if (runFlags[key]) {
-            btn.setText("关闭");
-            btn.setTextColor(colors.parseColor("#ffffff"));
-            btn.setBackgroundDrawable(createSolidDrawable(C.green, 16));
-        } else {
-            btn.setText("开启");
-            btn.setTextColor(colors.parseColor(C.green));
-            btn.setBackgroundDrawable(createStrokeDrawable(C.green, 16));
-        }
-        
-        btn.setTextSize(11);
-        btn.setPadding(0, dp2px(6), 0, dp2px(6));
-        var btnLp = new android.widget.LinearLayout.LayoutParams(-1, -2);
-        btnLp.setMargins(0, dp2px(10), 0, 0);
-        card.addView(btn, btnLp);
-        
-        btn.setOnClickListener(new android.view.View.OnClickListener({
-            onClick: function(v) {
-                toggleFunction(gameIdx, funcIdx, btn);
-            }
-        }));
-        
-        return card;
-    } catch (e) {
-        log("createMainFuncCard 异常: " + e);
-        return new android.widget.TextView(context);
-    }
-}
-
-// ==================== 主UI布局 ====================
+// ==================== 主UI布局（去掉功能卡片） ====================
 ui.layout(
     <frame w="*" h="*" bg="{{C.pageBg}}">
         <!-- 首页 -->
@@ -485,12 +389,10 @@ ui.layout(
                 <text id="txtCurrentGame" text="饿殍：明末千里行" textSize="16" textColor="{{C.textMain}}" marginTop="4"/>
             </vertical>
             
-            <text id="txtFuncTitle" text="功能列表" textSize="14" textColor="{{C.textMain}}" textStyle="bold" margin="16 12 16 4"/>
-            
-            <!-- 横向滑动功能卡片 -->
-            <android.widget.HorizontalScrollView w="*" h="*" margin="8 0" scrollbars="none">
-                <horizontal id="funcContainer" w="auto" h="wrap_content" padding="8"/>
-            </android.widget.HorizontalScrollView>
+            <vertical w="*" h="*" gravity="center">
+                <text text="功能请在启动游戏后" textSize="14" textColor="{{C.textSub}}" gravity="center"/>
+                <text text="通过悬浮窗使用" textSize="14" textColor="{{C.textSub}}" gravity="center" marginTop="4"/>
+            </vertical>
         </vertical>
         
         <!-- 设置页 -->
@@ -557,7 +459,6 @@ ui.layout(
 // ==================== 初始化 ====================
 try {
     ui.txtCurrentGame.setText(GAME_LIBRARY[0].name);
-    buildFunctionCards(0);
 } catch (e) {
     log("初始化异常: " + e);
 }
@@ -702,48 +603,55 @@ function startGameDetect() {
     });
 }
 
-// ==================== 加载圆形图标（加固版） ====================
+// ==================== 加载圆形图标（带备用显示） ====================
 function loadCircleIcon(imageView) {
     threads.start(function() {
+        var loaded = false;
         try {
             var imgPath = "/mnt/agents/upload/1000030693.jpg";
-            if (!files.exists(imgPath)) {
-                log("图标文件不存在: " + imgPath);
-                return;
+            if (files.exists(imgPath)) {
+                var options = new android.graphics.BitmapFactory.Options();
+                options.inSampleSize = 2;
+                var bitmap = android.graphics.BitmapFactory.decodeFile(imgPath, options);
+                if (bitmap) {
+                    var size = Math.min(bitmap.getWidth(), bitmap.getHeight());
+                    var output = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888);
+                    var canvas = new android.graphics.Canvas(output);
+                    var paint = new android.graphics.Paint();
+                    paint.setAntiAlias(true);
+                    paint.setFilterBitmap(true);
+                    paint.setDither(true);
+                    canvas.drawARGB(0, 0, 0, 0);
+                    canvas.drawCircle(size / 2, size / 2, size / 2, paint);
+                    paint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN));
+                    var rect = new android.graphics.Rect(0, 0, size, size);
+                    canvas.drawBitmap(bitmap, rect, rect, paint);
+                    bitmap.recycle();
+                    
+                    ui.run(function() {
+                        try {
+                            imageView.setImageBitmap(output);
+                            loaded = true;
+                        } catch (e) {}
+                    });
+                }
             }
-            var options = new android.graphics.BitmapFactory.Options();
-            options.inSampleSize = 2;
-            var bitmap = android.graphics.BitmapFactory.decodeFile(imgPath, options);
-            if (!bitmap) {
-                log("图标解码失败");
-                return;
-            }
-            var size = Math.min(bitmap.getWidth(), bitmap.getHeight());
-            var output = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888);
-            var canvas = new android.graphics.Canvas(output);
-            var paint = new android.graphics.Paint();
-            paint.setAntiAlias(true);
-            paint.setFilterBitmap(true);
-            paint.setDither(true);
-            canvas.drawARGB(0, 0, 0, 0);
-            canvas.drawCircle(size / 2, size / 2, size / 2, paint);
-            paint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN));
-            var rect = new android.graphics.Rect(0, 0, size, size);
-            canvas.drawBitmap(bitmap, rect, rect, paint);
-            bitmap.recycle();
-            
-            ui.run(function() {
-                try {
-                    imageView.setImageBitmap(output);
-                } catch (e) {}
-            });
         } catch (e) {
             log("加载圆形图标失败: " + e);
+        }
+        
+        if (!loaded) {
+            ui.run(function() {
+                try {
+                    imageView.setImageBitmap(null);
+                    imageView.setBackgroundDrawable(createSolidDrawable("#e94560", 23));
+                } catch (e) {}
+            });
         }
     });
 }
 
-// ==================== 悬浮窗（完整加固版） ====================
+// ==================== 悬浮窗（横向滑动 + 无吸附 + 小球修复） ====================
 function showFloatWindow() {
     try {
         if (floatWin) {
@@ -770,10 +678,12 @@ function showFloatWindow() {
                         <text id="fnSetting" text="设置" textColor="#888888" textSize="12" padding="12 4" gravity="center" marginLeft="16"/>
                     </horizontal>
                     
-                    <!-- 首页：功能列表 -->
+                    <!-- 首页：横向滑动功能列表 -->
                     <vertical id="fpHome" w="*" h="wrap_content" padding="10">
                         <text id="floatGameTitle" text="功能列表" textSize="13" textColor="#ffffff" textStyle="bold" marginBottom="6"/>
-                        <vertical id="floatFuncContainer" w="*" h="wrap_content"/>
+                        <android.widget.HorizontalScrollView w="*" h="wrap_content" scrollbars="none">
+                            <horizontal id="floatFuncContainer" w="auto" h="wrap_content"/>
+                        </android.widget.HorizontalScrollView>
                     </vertical>
                     
                     <!-- 用户中心 -->
@@ -810,7 +720,7 @@ function showFloatWindow() {
         
         refreshFloatFunctions();
         
-        // 收起按钮：仅切换尺寸与可见性，保持当前位置
+        // 收起按钮
         floatWin.btnMinimizeFloat.click(function() {
             try {
                 floatWin.floatPanel.setVisibility(android.view.View.GONE);
@@ -819,6 +729,7 @@ function showFloatWindow() {
                 floatExpanded = false;
                 var cx = floatWin.getX();
                 var cy = floatWin.getY();
+                // 仅越界保护，不吸附边缘
                 if (cx < 0) cx = 0;
                 if (cy < 0) cy = 0;
                 if (cx > device.width - 50) cx = device.width - 50;
@@ -851,6 +762,11 @@ function showFloatWindow() {
                             if (Math.abs(nx - floatWin.getX()) > 2 || Math.abs(ny - floatWin.getY()) > 2) {
                                 ballIsMoved = true;
                             }
+                            // 仅越界保护，不吸附
+                            if (nx < 0) nx = 0;
+                            if (ny < 0) ny = 0;
+                            if (nx > device.width - 50) nx = device.width - 50;
+                            if (ny > device.height - 50) ny = device.height - 50;
                             floatWin.setPosition(nx, ny);
                             return true;
                         case event.ACTION_UP:
@@ -873,11 +789,6 @@ function showFloatWindow() {
                             // 拖动结束：保存当前位置，不做边缘吸附
                             var fx = floatWin.getX();
                             var fy = floatWin.getY();
-                            if (fx < 0) fx = 0;
-                            if (fy < 0) fy = 0;
-                            if (fx > device.width - 50) fx = device.width - 50;
-                            if (fy > device.height - 50) fy = device.height - 50;
-                            floatWin.setPosition(fx, fy);
                             saveFloatPosition(fx, fy);
                             return true;
                     }
@@ -888,7 +799,7 @@ function showFloatWindow() {
             }
         }));
         
-        // 展开面板触摸监听（仅处理拖动）
+        // 展开面板触摸监听（仅处理拖动，不吸附边缘）
         var dragX = 0, dragY = 0, isMoved = false;
         floatWin.floatRoot.setOnTouchListener(new android.view.View.OnTouchListener({
             onTouch: function(v, event) {
@@ -906,18 +817,18 @@ function showFloatWindow() {
                             if (Math.abs(nx - floatWin.getX()) > 2 || Math.abs(ny - floatWin.getY()) > 2) {
                                 isMoved = true;
                             }
+                            // 仅越界保护，不吸附边缘
+                            if (nx < 0) nx = 0;
+                            if (ny < 0) ny = 0;
+                            if (nx + 320 > device.width) nx = device.width - 320;
+                            if (ny + 400 > device.height) ny = device.height - 400;
                             floatWin.setPosition(nx, ny);
                             return true;
                         case event.ACTION_UP:
                             if (isMoved) {
-                                // 保存当前位置，仅做越界保护，不做边缘吸附
+                                // 保存当前位置，不做边缘吸附
                                 var fx = floatWin.getX();
                                 var fy = floatWin.getY();
-                                if (fx < 0) fx = 0;
-                                if (fy < 0) fy = 0;
-                                if (fx + 320 > device.width) fx = device.width - 320;
-                                if (fy + 400 > device.height) fy = device.height - 400;
-                                floatWin.setPosition(fx, fy);
                                 saveFloatPosition(fx, fy);
                                 return true;
                             }
@@ -938,7 +849,7 @@ function showFloatWindow() {
     }
 }
 
-// 刷新悬浮窗功能列表
+// 刷新悬浮窗功能列表（横向滑动）
 function refreshFloatFunctions() {
     try {
         if (!floatWin) return;
@@ -966,27 +877,19 @@ function refreshFloatFunctions() {
         
         titleView.setText(game.name);
         
-        var row = null;
         for (var i = 0; i < game.funcs.length; i++) {
-            if (i % 3 === 0) {
-                row = new android.widget.LinearLayout(context);
-                row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-                row.setLayoutParams(new android.widget.LinearLayout.LayoutParams(-1, -2));
-                container.addView(row);
-            }
-            
             var func = game.funcs[i];
             var card = createFloatFuncCard(currentGameIndex, i, func);
-            var lp = new android.widget.LinearLayout.LayoutParams(0, -2, 1);
-            lp.setMargins(5, 5, 5, 5);
-            row.addView(card, lp);
+            var lp = new android.widget.LinearLayout.LayoutParams(dp2px(100), -2);
+            lp.setMargins(6, 6, 6, 6);
+            container.addView(card, lp);
         }
     } catch (e) {
         log("refreshFloatFunctions 异常: " + e);
     }
 }
 
-// 悬浮窗内白色功能卡片
+// 悬浮窗内白色功能卡片（固定宽度，横向排列）
 function createFloatFuncCard(gameIdx, funcIdx, func) {
     try {
         var card = new android.widget.LinearLayout(context);
